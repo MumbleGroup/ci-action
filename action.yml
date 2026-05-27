@@ -1,0 +1,44 @@
+name: "Build and push to Harbor"
+description: "Build a Docker image and push it to Harbor with :latest and :<sha> tags"
+
+inputs:
+  image:
+    description: "Image path without registry, e.g. vpsmanager/vpsmanager_b"
+    required: true
+  context:
+    description: "Build context (Dockerfile directory)"
+    required: false
+    default: "."
+  registry:
+    description: "Container registry host"
+    required: false
+    default: "harbor.m0.mumble.cloud"
+  username:
+    description: "Registry username"
+    required: false
+    default: "admin"
+  password:
+    description: "Registry password (pass the org secret REGISTRY_PASSWORD)"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Docker Login
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ inputs.registry }}
+        username: ${{ inputs.username }}
+        password: ${{ inputs.password }}
+
+    - name: Build and push
+      uses: docker/build-push-action@v5
+      with:
+        context: ${{ inputs.context }}
+        push: true
+        tags: |
+          ${{ inputs.registry }}/${{ inputs.image }}:latest
+          ${{ inputs.registry }}/${{ inputs.image }}:${{ github.sha }}
+        build-args: |
+          GIT_COMMIT=${{ github.sha }}
+          BUILD_DATE=${{ github.run_number }}
