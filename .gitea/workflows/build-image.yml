@@ -1,0 +1,57 @@
+name: Reusable build & push image
+
+# Centralized build+push for all Mumble projects.
+# Builds a Docker image and pushes it to Harbor with both :latest and :<sha> tags.
+# Called from a project's own workflow via `uses:` (workflow_call).
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        description: "Image path without registry, e.g. vpsmanager/vpsmanager_b"
+        required: true
+        type: string
+      context:
+        description: "Build context (Dockerfile directory)"
+        required: false
+        default: "."
+        type: string
+      registry:
+        description: "Container registry host"
+        required: false
+        default: "harbor.m0.mumble.cloud"
+        type: string
+      username:
+        description: "Registry username"
+        required: false
+        default: "admin"
+        type: string
+    secrets:
+      registry_password:
+        description: "Registry password (org secret REGISTRY_PASSWORD)"
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Docker Login
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ inputs.registry }}
+          username: ${{ inputs.username }}
+          password: ${{ secrets.registry_password }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ inputs.context }}
+          push: true
+          tags: |
+            ${{ inputs.registry }}/${{ inputs.image }}:latest
+            ${{ inputs.registry }}/${{ inputs.image }}:${{ github.sha }}
+          build-args: |
+            GIT_COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ github.run_number }}
