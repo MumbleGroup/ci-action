@@ -21,7 +21,7 @@ inputs:
     description: "Registry password (pass the org secret REGISTRY_PASSWORD)"
     required: true
   build-args:
-    description: "Extra build args, one KEY=value per line (e.g. VITE_SENTRY_DSN=${{ vars.VITE_SENTRY_DSN }})"
+    description: "Extra build args, one KEY=value per line (e.g. the public DSN from vars)"
     required: false
     default: ""
   sourcemaps:
