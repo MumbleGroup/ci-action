@@ -1,5 +1,5 @@
 name: "Build and push to Harbor"
-description: "Build a Docker image and push it to Harbor with :latest and :<sha> tags"
+description: "Build a Docker image and push it to Harbor with :latest and :<sha> tags; optionally upload the frontend sourcemaps to GlitchTip/Sentry"
 
 inputs:
   image:
@@ -20,6 +20,50 @@ inputs:
   password:
     description: "Registry password (pass the org secret REGISTRY_PASSWORD)"
     required: true
+  build-args:
+    description: "Extra build args, one KEY=value per line (e.g. VITE_SENTRY_DSN=${{ vars.VITE_SENTRY_DSN }})"
+    required: false
+    default: ""
+  sourcemaps:
+    description: "true = after the push, upload the sourcemaps of the build stage to the error tracker (release = commit sha)"
+    required: false
+    default: "false"
+  sourcemaps-stage:
+    description: "Dockerfile stage that holds the built files WITH the .map (the final image must not have them)"
+    required: false
+    default: "build"
+  sourcemaps-path:
+    description: "Directory of the built files inside that stage"
+    required: false
+    default: "/app/dist"
+  sourcemaps-url-prefix:
+    description: "URL prefix of those files in the browser (~/ = any host)"
+    required: false
+    default: "~/"
+  sourcemaps-required:
+    description: "true = a failed upload fails the job; default false: a warning, the image is already pushed"
+    required: false
+    default: "false"
+  sentry-auth-token:
+    description: "Tracker token with project:releases (pass secrets.SENTRY_AUTH_TOKEN)"
+    required: false
+    default: ""
+  sentry-url:
+    description: "Tracker URL (pass vars.SENTRY_URL; default the Mumble GlitchTip)"
+    required: false
+    default: ""
+  sentry-org:
+    description: "Organization slug on the tracker (pass vars.SENTRY_ORG; default mumble)"
+    required: false
+    default: ""
+  sentry-project:
+    description: "Project slug on the tracker, e.g. bdrive-frontend (pass vars.SENTRY_PROJECT)"
+    required: false
+    default: ""
+  sentry-cli-version:
+    description: "@sentry/cli version used for the upload"
+    required: false
+    default: "2.58.6"
 
 runs:
   using: "composite"
@@ -42,3 +86,25 @@ runs:
         build-args: |
           GIT_COMMIT=${{ github.sha }}
           BUILD_DATE=${{ github.run_number }}
+          SENTRY_RELEASE=${{ github.sha }}
+          VITE_RELEASE=${{ github.sha }}
+          ${{ inputs.build-args }}
+
+    - name: Upload sourcemaps
+      if: ${{ inputs.sourcemaps == 'true' }}
+      shell: bash
+      env:
+        SM_CONTEXT: ${{ inputs.context }}
+        SM_STAGE: ${{ inputs.sourcemaps-stage }}
+        SM_PATH: ${{ inputs.sourcemaps-path }}
+        SM_URL_PREFIX: ${{ inputs.sourcemaps-url-prefix }}
+        SM_REQUIRED: ${{ inputs.sourcemaps-required }}
+        SM_CLI_VERSION: ${{ inputs.sentry-cli-version }}
+        SM_RELEASE: ${{ github.sha }}
+        SM_BUILD_DATE: ${{ github.run_number }}
+        SM_BUILD_ARGS: ${{ inputs.build-args }}
+        SENTRY_AUTH_TOKEN: ${{ inputs.sentry-auth-token }}
+        SENTRY_URL: ${{ inputs.sentry-url }}
+        SENTRY_ORG: ${{ inputs.sentry-org }}
+        SENTRY_PROJECT: ${{ inputs.sentry-project }}
+      run: bash "${{ github.action_path }}/sourcemaps.sh"
