@@ -46,6 +46,7 @@ jobs:
 | `username` | `admin` | registry user |
 | `password` | (required) | registry password (pass `secrets.REGISTRY_PASSWORD`) |
 | `build-args` | | extra build args, one `KEY=value` per line |
+| `secret-files` | | BuildKit secrets from files on the runner, one `id=path` per line (see below) |
 | `sourcemaps` | `false` | `true` = upload the frontend sourcemaps after the push (see below) |
 | `sourcemaps-stage` | `build` | Dockerfile stage holding the built files with the `.map` |
 | `sourcemaps-path` | `/app/dist` | directory of the built files in that stage |
@@ -59,6 +60,34 @@ jobs:
 
 Every build gets the build args `GIT_COMMIT`, `BUILD_DATE`, `SENTRY_RELEASE` and `VITE_RELEASE`
 (the last two = commit sha: the release the SDK reports and the sourcemaps are uploaded with).
+
+## Build secrets (private registries)
+
+A dependency from a private registry (e.g. the Nuxt layer `@mumble/nuxt-name-com` on the Gitea
+npm registry) needs a token during the build. It goes in as a BuildKit secret, never as a build
+arg (those end up in the image metadata) and never copied into the context. Write the file in a
+step before the action, pass its path:
+
+```yaml
+      - name: npm registry credentials for the build
+        env:
+          NPM_REGISTRY_TOKEN: ${{ secrets.NPM_REGISTRY_TOKEN }}
+        run: |
+          umask 077
+          printf '@mumble:registry=https://git.mumble.group/api/packages/mumble-group/npm/\n//git.mumble.group/api/packages/mumble-group/npm/:_authToken=%s\n' "$NPM_REGISTRY_TOKEN" > "$RUNNER_TEMP/.npmrc"
+      - uses: MumbleGroup/ci-action@main
+        with:
+          image: <slug>/<slug>_f
+          secret-files: |
+            npmrc=${{ runner.temp }}/.npmrc
+```
+
+```dockerfile
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=true \
+    pnpm install --frozen-lockfile
+```
+
+The sourcemap upload rebuilds its stage with the same secrets.
 
 ## Sourcemaps (GlitchTip / Sentry)
 

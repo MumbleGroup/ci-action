@@ -24,6 +24,10 @@ inputs:
     description: "Extra build args, one KEY=value per line (e.g. the public DSN from vars)"
     required: false
     default: ""
+  secret-files:
+    description: "BuildKit secrets from files on the runner, one id=path per line (RUN --mount=type=secret,id=<id>), e.g. a .npmrc with the token of a private registry; never in a layer or a build arg"
+    required: false
+    default: ""
   sourcemaps:
     description: "true = after the push, upload the sourcemaps of the build stage to the error tracker (release = commit sha)"
     required: false
@@ -89,6 +93,7 @@ runs:
           SENTRY_RELEASE=${{ github.sha }}
           VITE_RELEASE=${{ github.sha }}
           ${{ inputs.build-args }}
+        secret-files: ${{ inputs.secret-files }}
 
     - name: Upload sourcemaps
       if: ${{ inputs.sourcemaps == 'true' }}
@@ -103,6 +108,7 @@ runs:
         SM_RELEASE: ${{ github.sha }}
         SM_BUILD_DATE: ${{ github.run_number }}
         SM_BUILD_ARGS: ${{ inputs.build-args }}
+        SM_SECRET_FILES: ${{ inputs.secret-files }}
         SENTRY_AUTH_TOKEN: ${{ inputs.sentry-auth-token }}
         SENTRY_URL: ${{ inputs.sentry-url }}
         SENTRY_ORG: ${{ inputs.sentry-org }}

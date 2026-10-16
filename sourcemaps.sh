@@ -7,7 +7,7 @@
 # browser runs. Then: release created and linked to the project, files uploaded, release finalized.
 #
 # Env: SM_CONTEXT SM_STAGE SM_PATH SM_URL_PREFIX SM_REQUIRED SM_CLI_VERSION SM_RELEASE
-#      SM_BUILD_DATE SM_BUILD_ARGS, SENTRY_AUTH_TOKEN SENTRY_URL SENTRY_ORG SENTRY_PROJECT.
+#      SM_BUILD_DATE SM_BUILD_ARGS SM_SECRET_FILES, SENTRY_AUTH_TOKEN SENTRY_URL SENTRY_ORG SENTRY_PROJECT.
 set -uo pipefail
 
 export SENTRY_URL="${SENTRY_URL:-https://errors.mumble.group}"
@@ -19,6 +19,7 @@ SM_URL_PREFIX="${SM_URL_PREFIX:-~/}"
 SM_CLI_VERSION="${SM_CLI_VERSION:-2.58.6}"
 SM_BUILD_DATE="${SM_BUILD_DATE:-}"
 SM_BUILD_ARGS="${SM_BUILD_ARGS:-}"
+SM_SECRET_FILES="${SM_SECRET_FILES:-}"
 OUT="${RUNNER_TEMP:-/tmp}/sourcemaps-${SM_RELEASE:-local}"
 TAG="ci-sourcemaps:${SM_RELEASE:-local}"
 
@@ -40,9 +41,15 @@ while IFS= read -r line; do
   line="${line#"${line%%[![:space:]]*}"}"
   [ -n "$line" ] && args+=(--build-arg "$line")
 done <<< "$SM_BUILD_ARGS"
+# Same BuildKit secrets too: a stage that mounts one (e.g. a private npm registry) does not
+# build without it when the cache misses.
+while IFS= read -r line; do
+  line="${line#"${line%%[![:space:]]*}"}"
+  [ -n "$line" ] && args+=(--secret "id=${line%%=*},src=${line#*=}")
+done <<< "$SM_SECRET_FILES"
 
 echo "sourcemaps: building stage '$SM_STAGE' of $SM_CONTEXT"
-docker build -q --target "$SM_STAGE" "${args[@]}" -t "$TAG" "$SM_CONTEXT" >/dev/null \
+DOCKER_BUILDKIT=1 docker build -q --target "$SM_STAGE" "${args[@]}" -t "$TAG" "$SM_CONTEXT" >/dev/null \
   || fail "docker build --target $SM_STAGE failed (is there a stage named '$SM_STAGE'? see sourcemaps-stage)"
 
 rm -rf "$OUT" && mkdir -p "$OUT"
